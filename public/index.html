@@ -1,42 +1,467 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geolocation</title>
+    <title>Weather API - Cari Lokasi</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg1: #0f2027; --bg2: #203a43; --bg3: #2c5364;
+        }
+
+        /* ===== TEMA OTOMATIS ===== */
+        body[data-tema="cerah"]  { --bg1: #1e90ff; --bg2: #4fb3ff; --bg3: #87ceeb; }
+        body[data-tema="malam"]  { --bg1: #0b1026; --bg2: #1b2452; --bg3: #2d3a7a; }
+        body[data-tema="mendung"]{ --bg1: #485563; --bg2: #5f6f7d; --bg3: #8a99a6; }
+        body[data-tema="hujan"]  { --bg1: #1c2b3a; --bg2: #2f4558; --bg3: #4a6378; }
+        body[data-tema="badai"]  { --bg1: #16161f; --bg2: #2b2b3d; --bg3: #47475e; }
+        body[data-tema="kabut"]  { --bg1: #606c76; --bg2: #8b979f; --bg3: #b5bec4; }
+        body[data-tema="salju"]  { --bg1: #5b7b99; --bg2: #86a5c0; --bg3: #c5d9e8; }
+
+        body {
+            min-height: 100vh;
+            font-family: "Segoe UI", sans-serif;
+            background: linear-gradient(160deg, var(--bg1), var(--bg2), var(--bg3));
+            background-attachment: fixed;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            padding: 30px 20px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 580px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 22px;
+            padding: 28px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+            height: fit-content;
+        }
+
+        .identitas { font-size: 13px; opacity: 0.75; margin-bottom: 4px; }
+        h1 { font-size: 26px; margin-bottom: 18px; }
+
+        .search { display: flex; gap: 8px; margin-bottom: 12px; }
+
+        input {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        button {
+            padding: 12px 18px;
+            border: none;
+            border-radius: 12px;
+            background: #00c6ff;
+            color: #002b3d;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background: #4dd8ff; }
+        button.ghost { background: rgba(255, 255, 255, 0.18); color: #fff; }
+        button.ghost:hover { background: rgba(255, 255, 255, 0.3); }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+        .chip {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.16);
+            color: #fff;
+            font-weight: 400;
+        }
+        .chip:hover { background: rgba(255, 255, 255, 0.3); }
+
+        #pesan { margin-bottom: 10px; color: #ffd0d0; min-height: 18px; font-size: 14px; }
+
+        /* ===== HERO WAKTU + CUACA ===== */
+        .hero {
+            background: rgba(0, 0, 0, 0.22);
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 14px;
+        }
+        .waktu { text-align: center; margin-bottom: 14px; }
+        #jam { font-size: 44px; font-weight: 300; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+        #tanggal { font-size: 13px; opacity: 0.8; }
+        #zona { font-size: 12px; opacity: 0.6; }
+
+        .cuaca-utama {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            margin-bottom: 14px;
+        }
+        #ikon { font-size: 64px; animation: melayang 3s ease-in-out infinite; }
+        @keyframes melayang {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        #suhu { font-size: 46px; font-weight: 600; line-height: 1; }
+        #kondisi { font-size: 15px; opacity: 0.9; }
+        #terasa { font-size: 12px; opacity: 0.65; }
+
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .stat {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 10px 6px;
+            text-align: center;
+        }
+        .stat small { display: block; font-size: 11px; opacity: 0.65; margin-bottom: 2px; }
+        .stat span { font-size: 14px; font-weight: 600; }
+
+        #map {
+            height: 240px;
+            border-radius: 16px;
+            margin-bottom: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .item {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 14px;
+        }
+        .item.full { grid-column: span 2; }
+        .item small { display: block; opacity: 0.65; font-size: 12px; margin-bottom: 4px; }
+        .item span { font-size: 16px; font-weight: 600; word-break: break-word; }
+
+        .actions { display: flex; gap: 8px; margin-top: 14px; }
+        .actions button, .actions a {
+            flex: 1;
+            text-align: center;
+            text-decoration: none;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.18);
+            color: #fff;
+            cursor: pointer;
+        }
+        .actions button:hover, .actions a:hover { background: rgba(255, 255, 255, 0.3); }
+        .hidden { display: none !important; }
+
+        .riwayat-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0 8px;
+            font-size: 13px;
+            opacity: 0.85;
+        }
+        .riwayat-head button {
+            padding: 4px 10px;
+            font-size: 12px;
+            background: transparent;
+            color: #ffd0d0;
+        }
+        #riwayat { display: flex; flex-direction: column; gap: 6px; }
+        .riwayat-item {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 13px;
+            font-weight: 400;
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+        .riwayat-item:hover { background: rgba(255, 255, 255, 0.25); }
+    </style>
 </head>
-<body>
-    
-    <h3>Nama : Ikhsaan Hanafi </h3>
-    <h3>NIM : 20240140226</h3>
-    
-    <p>
-        Kota :
-        <span id="lokasi"></span>
-    </p>
+<body data-tema="">
+    <div class="card">
+        <p class="identitas">Ikhsaan Hanafi - 20240140226</p>
+        <h1>🌍 Cari Lokasi</h1>
 
-    <hr>
+        <div class="search">
+            <input type="text" id="lokasi" placeholder="Contoh: Yogyakarta, Bandung, Kasihan">
+            <button id="btnCari">Cari</button>
+            <button id="btnGps" class="ghost" title="Lokasi saya">📍</button>
+        </div>
 
-    <p>
-        Koordinat :
-        <span id="negara"></span>
-    </p>
+        <div class="chips" id="chips"></div>
 
+        <p id="pesan"></p>
+
+        <!-- WAKTU + CUACA -->
+        <div class="hero hidden" id="hero">
+            <div class="waktu">
+                <div id="jam">--:--:--</div>
+                <div id="tanggal">-</div>
+                <div id="zona">-</div>
+            </div>
+
+            <div class="cuaca-utama" id="cuacaUtama">
+                <div id="ikon">🌤️</div>
+                <div>
+                    <div id="suhu">--°C</div>
+                    <div id="kondisi">-</div>
+                    <div id="terasa">-</div>
+                </div>
+            </div>
+
+            <div class="stats" id="stats">
+                <div class="stat"><small>💧 Kelembapan</small><span id="kelembapan">-</span></div>
+                <div class="stat"><small>💨 Angin</small><span id="angin">-</span></div>
+                <div class="stat"><small>🌡️ Min / Max</small><span id="minmax">-</span></div>
+                <div class="stat"><small>🌅 Terbit</small><span id="sunrise">-</span></div>
+                <div class="stat"><small>🌇 Terbenam</small><span id="sunset">-</span></div>
+            </div>
+
+            <p id="cuacaGagal" class="hidden" style="text-align:center;opacity:.7;font-size:13px">
+                Data cuaca lagi nggak tersedia
+            </p>
+        </div>
+
+        <div id="map"></div>
+
+        <div class="grid">
+            <div class="item full"><small>Lokasi</small><span id="hasilLokasi">-</span></div>
+            <div class="item"><small>Negara</small><span id="negara">-</span></div>
+            <div class="item"><small>Provinsi</small><span id="provinsi">-</span></div>
+            <div class="item full"><small>Kecamatan</small><span id="kecamatan">-</span></div>
+            <div class="item"><small>Longitude</small><span id="longitude">-</span></div>
+            <div class="item"><small>Latitude</small><span id="latitude">-</span></div>
+        </div>
+
+        <div class="actions hidden" id="actions">
+            <button id="btnCopy">📋 Copy Koordinat</button>
+            <a id="linkGmaps" target="_blank" rel="noopener">🗺️ Google Maps</a>
+        </div>
+
+        <div class="riwayat-head">
+            <span>🕘 Riwayat pencarian</span>
+            <button id="btnHapus">Hapus</button>
+        </div>
+        <div id="riwayat"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        const input = document.getElementById("lokasi");
+        const pesan = document.getElementById("pesan");
+        const kotaPopuler = ["Yogyakarta", "Jakarta", "Bandung", "Surabaya", "Bali", "Medan", "Makassar"];
 
-        fetch("/api/lokasi")
-            .then(response => response.json())
-            .then(data => {
+        // ===== KODE CUACA (WMO) =====
+        function infoCuaca(kode, siang) {
+            if (kode === 0) return { ikon: siang ? "☀️" : "🌙", teks: "Cerah", tema: siang ? "cerah" : "malam" };
+            if (kode === 1) return { ikon: siang ? "🌤️" : "🌙", teks: "Cerah berawan", tema: siang ? "cerah" : "malam" };
+            if (kode === 2) return { ikon: "⛅", teks: "Berawan sebagian", tema: siang ? "mendung" : "malam" };
+            if (kode === 3) return { ikon: "☁️", teks: "Berawan tebal", tema: "mendung" };
+            if ([45, 48].includes(kode)) return { ikon: "🌫️", teks: "Berkabut", tema: "kabut" };
+            if ([51, 53, 55, 56, 57].includes(kode)) return { ikon: "🌦️", teks: "Gerimis", tema: "hujan" };
+            if ([61, 63, 65, 66, 67].includes(kode)) return { ikon: "🌧️", teks: "Hujan", tema: "hujan" };
+            if ([71, 73, 75, 77, 85, 86].includes(kode)) return { ikon: "❄️", teks: "Salju", tema: "salju" };
+            if ([80, 81, 82].includes(kode)) return { ikon: "🌧️", teks: "Hujan lebat", tema: "hujan" };
+            if ([95, 96, 99].includes(kode)) return { ikon: "⛈️", teks: "Badai petir", tema: "badai" };
+            return { ikon: "🌡️", teks: "Tidak diketahui", tema: "mendung" };
+        }
 
-                console.log(data);
+        // ===== JAM LOKAL =====
+        let timerJam = null;
 
-                document.getElementById("lokasi").innerHTML = data.kota;
+        function mulaiJam(timezone) {
+            clearInterval(timerJam);
+            const fmtJam = new Intl.DateTimeFormat("id-ID", {
+                timeZone: timezone, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+            });
+            const fmtTgl = new Intl.DateTimeFormat("id-ID", {
+                timeZone: timezone, weekday: "long", day: "numeric", month: "long", year: "numeric",
+            });
+            const fmtZona = new Intl.DateTimeFormat("id-ID", {
+                timeZone: timezone, timeZoneName: "short",
+            });
 
-                document.getElementById("negara").innerHTML = data.koordinat;
-                
-            })
+            const update = () => {
+                const now = new Date();
+                document.getElementById("jam").textContent = fmtJam.format(now).replace(/\./g, ":");
+                document.getElementById("tanggal").textContent = fmtTgl.format(now);
+                const zona = fmtZona.formatToParts(now).find((p) => p.type === "timeZoneName")?.value;
+                document.getElementById("zona").textContent = `${timezone} (${zona})`;
+            };
+            update();
+            timerJam = setInterval(update, 1000);
+        }
 
-            
+        // ===== PETA =====
+        const map = L.map("map").setView([-2.5, 118], 4);
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap",
+            maxZoom: 19,
+        }).addTo(map);
+        let marker = null;
+
+        // ===== CHIPS =====
+        const chips = document.getElementById("chips");
+        kotaPopuler.forEach((k) => {
+            const b = document.createElement("button");
+            b.className = "chip";
+            b.textContent = k;
+            b.onclick = () => { input.value = k; cariLokasi(k); };
+            chips.appendChild(b);
+        });
+
+        // ===== RIWAYAT =====
+        const ambilRiwayat = () => JSON.parse(localStorage.getItem("riwayat") || "[]");
+
+        function simpanRiwayat(nama) {
+            let list = ambilRiwayat().filter((x) => x.toLowerCase() !== nama.toLowerCase());
+            list.unshift(nama);
+            localStorage.setItem("riwayat", JSON.stringify(list.slice(0, 5)));
+            renderRiwayat();
+        }
+
+        function renderRiwayat() {
+            const box = document.getElementById("riwayat");
+            box.innerHTML = "";
+            const list = ambilRiwayat();
+            if (!list.length) {
+                box.innerHTML = '<small style="opacity:.5">Belum ada pencarian</small>';
+                return;
+            }
+            list.forEach((nama) => {
+                const b = document.createElement("button");
+                b.className = "riwayat-item";
+                b.textContent = nama;
+                b.onclick = () => { input.value = nama; cariLokasi(nama); };
+                box.appendChild(b);
+            });
+        }
+
+        document.getElementById("btnHapus").onclick = () => {
+            localStorage.removeItem("riwayat");
+            renderRiwayat();
+        };
+
+        // ===== TAMPIL CUACA =====
+        function tampilkanCuaca(c) {
+            const hero = document.getElementById("hero");
+            hero.classList.remove("hidden");
+
+            const adaCuaca = !!c;
+            document.getElementById("cuacaUtama").classList.toggle("hidden", !adaCuaca);
+            document.getElementById("stats").classList.toggle("hidden", !adaCuaca);
+            document.getElementById("cuacaGagal").classList.toggle("hidden", adaCuaca);
+
+            if (!adaCuaca) {
+                document.body.dataset.tema = "";
+                return;
+            }
+
+            const info = infoCuaca(c.kode, c.siang);
+            document.body.dataset.tema = info.tema;
+
+            document.getElementById("ikon").textContent = info.ikon;
+            document.getElementById("suhu").textContent = `${Math.round(c.suhu)}°C`;
+            document.getElementById("kondisi").textContent = info.teks;
+            document.getElementById("terasa").textContent = `Terasa seperti ${Math.round(c.terasa)}°C`;
+            document.getElementById("kelembapan").textContent = `${c.kelembapan}%`;
+            document.getElementById("angin").textContent = `${c.angin} km/j`;
+            document.getElementById("minmax").textContent = `${Math.round(c.min)}° / ${Math.round(c.max)}°`;
+            document.getElementById("sunrise").textContent = c.sunrise;
+            document.getElementById("sunset").textContent = c.sunset;
+
+            mulaiJam(c.timezone);
+        }
+
+        // ===== TAMPIL HASIL =====
+        function tampilkan(data) {
+            document.getElementById("hasilLokasi").textContent = data.lokasi;
+            document.getElementById("negara").textContent = data.negara;
+            document.getElementById("provinsi").textContent = data.provinsi;
+            document.getElementById("kecamatan").textContent = data.kecamatan;
+            document.getElementById("longitude").textContent = data.longitude;
+            document.getElementById("latitude").textContent = data.latitude;
+
+            tampilkanCuaca(data.cuaca);
+
+            const pos = [data.latitude, data.longitude];
+            map.setView(pos, 12);
+            if (marker) map.removeLayer(marker);
+            marker = L.marker(pos).addTo(map).bindPopup(data.lokasi).openPopup();
+
+            document.getElementById("linkGmaps").href =
+                `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
+            document.getElementById("actions").classList.remove("hidden");
+            document.getElementById("btnCopy").dataset.koordinat =
+                `${data.latitude}, ${data.longitude}`;
+        }
+
+        // ===== FETCH =====
+        async function ambilData(q) {
+            pesan.textContent = "Nyari...";
+            try {
+                const res = await fetch(`/api/lokasi?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                if (!res.ok) {
+                    pesan.textContent = data.message;
+                    return null;
+                }
+                pesan.textContent = "";
+                tampilkan(data);
+                return data;
+            } catch (err) {
+                console.error(err);
+                pesan.textContent = "Gagal konek ke server";
+                return null;
+            }
+        }
+
+        async function cariLokasi(teks) {
+            const q = (teks || input.value).trim();
+            if (!q) {
+                pesan.textContent = "Lokasi wajib diisi";
+                return;
+            }
+            const data = await ambilData(q);
+            if (data) simpanRiwayat(q);
+        }
+
+        // ===== GPS =====
+        document.getElementById("btnGps").onclick = () => {
+            if (!navigator.geolocation) {
+                pesan.textContent = "Browser nggak support geolocation";
+                return;
+            }
+            pesan.textContent = "Ngambil lokasi kamu...";
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    const { longitude, latitude } = pos.coords;
+                    const data = await ambilData(`${longitude},${latitude}`);
+                    if (data) input.value = data.lokasi;
+                },
+                () => { pesan.textContent = "Izin lokasi ditolak / gagal"; }
+            );
+        };
+
+        // ===== COPY =====
+        document.getElementById("btnCopy").onclick = async (e) => {
+            await navigator.clipboard.writeText(e.target.dataset.koordinat);
+            const teksLama = e.target.textContent;
+            e.target.textContent = "✅ Kecopy!";
+            setTimeout(() => (e.target.textContent = teksLama), 1500);
+        };
+
+        document.getElementById("btnCari").onclick = () => cariLokasi();
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") cariLokasi();
+        });
+
+        renderRiwayat();
     </script>
 </body>
 </html>
